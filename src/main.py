@@ -34,10 +34,7 @@ def whats_new(session):
         try:
             soup = create_bsoup_from_url(session, version_link)
         except RequestException as e:
-            err_msg = (f'Страница {version_link} не загрузилась. '
-                       f'Вызвано исключение {e.__class__.__name__}. '
-                       f'Переход к следующей.')
-            err_msg_list.append(err_msg)
+            err_msg_list.append(e)
             continue
         h1 = find_tag(soup, 'h1')
         dl = find_tag(soup, 'dl')
@@ -117,10 +114,7 @@ def pep(session):
         try:
             soup = create_bsoup_from_url(session, element[1])
         except RequestException as e:
-            err_msg = (f'Страница PEP {element[1]} не загрузилась. '
-                       f'Вызвано исключение {e.__class__.__name__}. '
-                       f'Переход к следующему PEP.')
-            err_msg_list.append(err_msg)
+            err_msg_list.append(e)
             continue
         dl_tag = soup.find('dl')
         dd_tag = dl_tag.dd
@@ -170,7 +164,7 @@ def main():
 
     except Exception as e:
         logging.exception(
-            f'Ошибка парсера: вызвано исключение {e.__class__.__name__}',
+            f'Ошибка парсера: вызвано исключение {e.__class__.__name__} ',
             stack_info=True
         )
     logging.info('Парсер завершил работу.')

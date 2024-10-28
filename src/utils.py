@@ -9,8 +9,11 @@ from exceptions import ParserFindTagException, ResponseIsNoneException
 def get_response(session, url, encoding='utf-8'):
     try:
         response = session.get(url)
-    except RequestException:
-        raise ResponseIsNoneException
+    except RequestException as e:
+        raise ResponseIsNoneException(
+            f'Страница PEP {url} не загрузилась. '
+            f'Вызвано исключение {e.__class__.__name__}. '
+            'Переход к следующему PEP.')
     response.encoding = encoding
     return response
 
