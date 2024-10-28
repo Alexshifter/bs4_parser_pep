@@ -3,13 +3,14 @@ import logging
 from bs4 import BeautifulSoup
 from requests import RequestException
 
-from exceptions import ParserFindTagException
+from exceptions import ParserFindTagException, ResponseIsNoneException
 
 
 def get_response(session, url, encoding='utf-8'):
-    response = session.get(url)
-    if response is None:
-        raise RequestException
+    try:
+        response = session.get(url)
+    except RequestException:
+        raise ResponseIsNoneException
     response.encoding = encoding
     return response
 
@@ -23,12 +24,11 @@ def find_tag(soup, tag, attrs=None):
     return searched_tag
 
 
-def create_bsoup_from_url(session, url_constant):
-    try:
-        response = get_response(session, url_constant)
-    except RequestException as e:
-        logging.exception(
-            f'Ошибка парсера: вызвано исклчение {e.__class__.__name__} '
-        )
-        return
+def create_bsoup_from_url(session, url_constant, encoding='utf-8'):
+    response = get_response(session, url_constant, encoding)
     return BeautifulSoup(response.text, features='lxml')
+
+
+def add_msgs_to_logs(msg_list, log_method):
+    for msg in msg_list:
+        log_method(msg)

@@ -3,15 +3,15 @@ import re
 from urllib.parse import urljoin
 
 import requests_cache
-from bs4 import BeautifulSoup
 from requests import RequestException
 from tqdm import tqdm
 
 from configs import configure_argument_parser, configure_logging
-from constants import BASE_DIR, EXPECTED_STATUS, MAIN_DOC_URL, MAIN_PEPS_URL
+from constants import (BASE_DIR, DOWNLOADS, EXPECTED_STATUS, MAIN_DOC_URL,
+                       MAIN_PEPS_URL)
 from exceptions import ParserFindTagException
 from outputs import control_output
-from utils import create_bsoup_from_url, find_tag, get_response
+from utils import add_msgs_to_logs, create_bsoup_from_url, find_tag
 
 
 def whats_new(session):
@@ -32,21 +32,19 @@ def whats_new(session):
         href = version_a_tag['href']
         version_link = urljoin(whats_new_url, href)
         try:
-            response = get_response(session, version_link)
+            soup = create_bsoup_from_url(session, version_link)
         except RequestException as e:
             err_msg = (f'Страница {version_link} не загрузилась. '
                        f'Вызвано исключение {e.__class__.__name__}. '
                        f'Переход к следующей.')
             err_msg_list.append(err_msg)
             continue
-        soup = BeautifulSoup(response.text, features='lxml')
         h1 = find_tag(soup, 'h1')
         dl = find_tag(soup, 'dl')
         dl_text = dl.text.replace('\n', ' ')
         results.append((version_link, h1.text, dl_text))
     if err_msg_list:
-        for err_msg in err_msg_list:
-            logging.error(err_msg)
+        add_msgs_to_logs(err_msg_list, logging.error)
     return results
 
 
@@ -87,9 +85,9 @@ def download(session):
     pdf_a4_link = pdf_a4_tag['href']
     archive_url = urljoin(downloads_url, pdf_a4_link)
     filename = archive_url.split('/')[-1]
-    DOWNLOADS_DIR = BASE_DIR / 'downloads'
-    DOWNLOADS_DIR.mkdir(exist_ok=True)
-    archive_path = DOWNLOADS_DIR / filename
+    download_dir = BASE_DIR / DOWNLOADS
+    download_dir.mkdir(exist_ok=True)
+    archive_path = download_dir / filename
     response = session.get(archive_url)
     with open(archive_path, 'wb') as file:
         file.write(response.content)
@@ -114,32 +112,34 @@ def pep(session):
     dict_statuses = dict()
     results = [('Статус', 'Количество',)]
     err_msg_list = []
+    incorrect_status_msgs = []
     for element in tqdm(abbr_links_list):
         try:
-            response = get_response(session, element[1])
-
+            soup = create_bsoup_from_url(session, element[1])
         except RequestException as e:
             err_msg = (f'Страница PEP {element[1]} не загрузилась. '
-                       f'Вызвано исключение {e.__class__.__name__}'
+                       f'Вызвано исключение {e.__class__.__name__}. '
                        f'Переход к следующему PEP.')
             err_msg_list.append(err_msg)
             continue
-        soup = BeautifulSoup(response.text, features='lxml')
         dl_tag = soup.find('dl')
         dd_tag = dl_tag.dd
         while not dd_tag.abbr:
             dd_tag = dd_tag.find_next_sibling('dd')
         status_pep = dd_tag.string
         if status_pep not in EXPECTED_STATUS[element[0][1:]]:
-            logging.info(
+            inc_status_msg = (
                 f'Несовпадающие статусы:\n{element[1]}\n'
                 f'Статус в карточке: {status_pep}\n'
-                f'Ожидаемые статусы: {EXPECTED_STATUS[element[0][1:]]}')
+                f'Ожидаемые статусы: {EXPECTED_STATUS[element[0][1:]]}'
+            )
+            incorrect_status_msgs.append(inc_status_msg)
         dict_statuses[status_pep] = dict_statuses.get(status_pep, 0) + 1
         total_peps += 1
     if err_msg_list:
-        for err_msg in err_msg_list:
-            logging.error(err_msg)
+        add_msgs_to_logs(err_msg_list, logging.error)
+    if incorrect_status_msgs:
+        add_msgs_to_logs(incorrect_status_msgs, logging.info)
     results.extend(list(dict_statuses.items()))
     results.append(('Total', total_peps,))
     return results
